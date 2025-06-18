@@ -6,6 +6,7 @@ import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceada
 import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter.mapper.IBootcampEntityMapper;
 import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter.repository.IBootcampRepository;
 import lombok.AllArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 @AllArgsConstructor
@@ -29,6 +30,7 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
     }
 
     @Override
+    @Transactional
     public Mono<Void> deleteById(Long id) {
         return bootcampRepository.deleteById(id);
     }

@@ -40,5 +40,11 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
         return bootcampRepository.existsById(id);
     }
 
+    @Override
+    public Mono<Bootcamp> findById(Long id) {
+        return bootcampRepository.findById(id)
+                .map(bootcampEntityMapper::toModel);
+    }
+
 
 }

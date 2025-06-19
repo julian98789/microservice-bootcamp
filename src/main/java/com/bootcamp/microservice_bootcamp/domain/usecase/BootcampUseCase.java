@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 public class BootcampUseCase implements IBootcampServicePort {
@@ -34,23 +35,22 @@ public class BootcampUseCase implements IBootcampServicePort {
     public Mono<String> registerBootcampWithCapacities(Bootcamp bootcamp, List<Long> capacityIds) {
         return validateCapacity(bootcamp)
                 .then(validateTechnologyIds(capacityIds))
-                .then(bootcampPersistencePort.existsByName(bootcamp.name()))
+                .then(Mono.defer(() -> bootcampPersistencePort.existsByName(bootcamp.name())))
                 .flatMap(exists -> {
                     if (Boolean.TRUE.equals(exists)) {
                         return Mono.error(new BusinessException(TechnicalMessage.BOOTCAMP_ALREADY_EXISTS));
                     }
                     return bootcampPersistencePort.save(bootcamp)
-                            .flatMap(savedCapacity -> {
-                                return bootcampCapacityAssociationPort.associateCapacityToBootcamp(savedCapacity.id(), capacityIds)
-                                        .flatMap(success -> {
-                                            if (Boolean.TRUE.equals(success)) {
-                                                return Mono.just(TechnicalMessage.BOOTCAMP_CREATED.name());
-                                            } else {
-                                                return bootcampPersistencePort.deleteById(savedCapacity.id())
-                                                        .then(Mono.error(new BusinessException(TechnicalMessage.BOOTCAMP_ASSOCIATION_FAILED)));
-                                            }
-                                        });
-                            });
+                            .flatMap(savedCapacity ->
+                                    bootcampCapacityAssociationPort.associateCapacityToBootcamp(savedCapacity.id(), capacityIds)
+                                            .flatMap(success -> {
+                                                if (Boolean.TRUE.equals(success)) {
+                                                    return Mono.just(TechnicalMessage.BOOTCAMP_CREATED.name());
+                                                } else {
+                                                    return bootcampPersistencePort.deleteById(savedCapacity.id())
+                                                            .then(Mono.error(new BusinessException(TechnicalMessage.BOOTCAMP_ASSOCIATION_FAILED)));
+                                                }
+                                            }));
                 });
     }
 
@@ -65,6 +65,39 @@ public class BootcampUseCase implements IBootcampServicePort {
         return bootcampCapacityAssociationPort.deleteCapacitiesByBootcampId(bootcampId)
                 .then(bootcampPersistencePort.deleteById(bootcampId));
     }
+
+    @Override
+    public Mono<List<Long>> validateAndReturnIds(List<Long> ids) {
+        return Flux.fromIterable(ids)
+                .flatMap(id ->
+                        bootcampPersistencePort.existsById(id)
+                                .flatMap(exists -> {
+                                    if (Boolean.FALSE.equals(exists)) {
+                                        return Mono.error(new BusinessException(
+                                                TechnicalMessage.BOOTCAMP_NOT_FOUND
+                                        ));
+                                    }
+                                    return bootcampPersistencePort.findById(id);
+                                })
+                )
+                .collectList()
+                .flatMap(bootcamps -> {
+                    for (int i = 0; i < bootcamps.size(); i++) {
+                        for (int j = i + 1; j < bootcamps.size(); j++) {
+                            Bootcamp b1 = bootcamps.get(i);
+                            Bootcamp b2 = bootcamps.get(j);
+                            if (Objects.equals(b1.releaseDate(), b2.releaseDate())
+                                    || Objects.equals(b1.duration(), b2.duration())) {
+                                return Mono.error(new BusinessException(
+                                        TechnicalMessage.BOOTCAMP_DUPLICATE_DATE_DURATION
+                                        ));
+                            }
+                        }
+                    }
+                    return Mono.just(ids);
+                });
+    }
+
 
 
 

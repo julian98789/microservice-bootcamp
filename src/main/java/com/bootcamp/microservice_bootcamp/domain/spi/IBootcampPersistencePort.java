@@ -8,4 +8,5 @@ public interface IBootcampPersistencePort {
     Mono<Boolean> existsByName(String name);
     Mono<Void> deleteById(Long id);
     Mono<Boolean> existsById(Long id);
+    Mono<Bootcamp> findById(Long id);
 }

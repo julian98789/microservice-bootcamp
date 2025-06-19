@@ -1,5 +1,6 @@
 package com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter.entity;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 @Getter
 @Setter
 @RequiredArgsConstructor
+@AllArgsConstructor
 public class BootcampEntity {
     @Id
     private Long id;

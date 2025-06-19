@@ -9,13 +9,13 @@ import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceada
 import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter.repository.IBootcampRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -48,15 +48,14 @@ public class BootcampQueryAdapter implements IBootcampQueryPort {
         return webClient.get()
                 .uri(capacityServiceUrl + "/capacity/bootcamp/relation-counts")
                 .retrieve()
-                .bodyToFlux(Map.class)
+                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {})
                 .collectList()
                 .map(countsList -> {
                     Map<Long, Integer> bootcampIdToCount = new HashMap<>();
-                    for (Map m : countsList) {
-                        bootcampIdToCount.put(
-                                Long.valueOf(m.get("bootcampId").toString()),
-                                Integer.valueOf(m.get("relationCount").toString())
-                        );
+                    for (Map<String, Object> m : countsList) {
+                        Long bootcampId = Long.valueOf(m.get("bootcampId").toString());
+                        Integer relationCount = Integer.valueOf(m.get("relationCount").toString());
+                        bootcampIdToCount.put(bootcampId, relationCount);
                     }
                     return bootcampIdToCount;
                 });
@@ -98,7 +97,7 @@ public class BootcampQueryAdapter implements IBootcampQueryPort {
         return webClient.get()
                 .uri(capacityServiceUrl + "/capacity/bootcamp/capacities-technologies?bootcampId={id}", entity.getId())
                 .retrieve()
-                .bodyToFlux(Map.class)
+                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {})
                 .collectList()
                 .map(this::mapToCapacitiesWithTechnologies)
                 .map(capacities -> new BootcampWithCapacitiesAndTechnologies(
@@ -111,16 +110,23 @@ public class BootcampQueryAdapter implements IBootcampQueryPort {
                 ));
     }
 
-    private List<CapacityWithTechnologies> mapToCapacitiesWithTechnologies(List<Map> capacityList) {
-        return capacityList.stream().map(x -> {
-            Long capacityId = Long.valueOf(x.get("id").toString());
-            String capacityName = (String) x.get("name");
-            List<Map<String, Object>> techs = (List<Map<String, Object>>) x.getOrDefault("technologies", Collections.emptyList());
-            List<TechnologySummary> technologies = techs.stream().map(t -> new TechnologySummary(
-                    Long.valueOf(t.get("id").toString()),
-                    t.get("name").toString()
-            )).collect(Collectors.toList());
-            return new CapacityWithTechnologies(capacityId, capacityName, technologies);
-        }).collect(Collectors.toList());
+    private List<CapacityWithTechnologies> mapToCapacitiesWithTechnologies(List<Map<String, Object>> capacityList) {
+        return capacityList.stream()
+                .map(x -> {
+                    Long capacityId = Long.valueOf(x.get("id").toString());
+                    String capacityName = (String) x.get("name");
+
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> techs = (List<Map<String, Object>>) x.getOrDefault("technologies", Collections.emptyList());
+
+                    List<TechnologySummary> technologies = techs.stream()
+                            .map(t -> new TechnologySummary(
+                                    Long.valueOf(t.get("id").toString()),
+                                    t.get("name").toString()))
+                            .toList();
+
+                    return new CapacityWithTechnologies(capacityId, capacityName, technologies);
+                })
+                .toList();
     }
 }

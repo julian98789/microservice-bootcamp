@@ -18,4 +18,5 @@ public interface IBootcampServicePort {
             String direction
     );
     Mono<Void> deleteBootcampAndCascade(Long bootcampId);
+    Mono<List<Long>> validateAndReturnIds(List<Long> ids);
 }

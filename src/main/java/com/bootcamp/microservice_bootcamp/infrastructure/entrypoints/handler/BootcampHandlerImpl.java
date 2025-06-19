@@ -104,6 +104,41 @@ public class BootcampHandlerImpl {
                 });
     }
 
+    public Mono<ServerResponse> validateBootcampIds(ServerRequest request) {
+        return request.bodyToMono(List.class)
+                .flatMap(idsRaw -> {
+                    List<Long> ids = ((List<?>) idsRaw).stream()
+                            .map(Object::toString)
+                            .map(Long::valueOf)
+                            .toList();
+                    return bootcampServicePort.validateAndReturnIds(ids);
+                })
+                .flatMap(validIds -> ServerResponse.ok().bodyValue(validIds))
+                .onErrorResume(BusinessException.class, ex -> buildErrorResponse(
+                        HttpStatus.BAD_REQUEST,
+                        ex.getTechnicalMessage(),
+                        List.of(ErrorDTO.builder()
+                                .code(ex.getTechnicalMessage().getCode())
+                                .message(ex.getMessage())
+                                .param(ex.getTechnicalMessage().getParam())
+                                .build())))
+                .onErrorResume(TechnicalException.class, ex -> buildErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        TechnicalMessage.INTERNAL_ERROR,
+                        List.of(ErrorDTO.builder()
+                                .code(ex.getTechnicalMessage().getCode())
+                                .message(ex.getMessage())
+                                .param(ex.getTechnicalMessage().getParam())
+                                .build())))
+                .onErrorResume(ex -> buildErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        TechnicalMessage.INTERNAL_ERROR,
+                        List.of(ErrorDTO.builder()
+                                .code(TechnicalMessage.INTERNAL_ERROR.getCode())
+                                .message(ex.getMessage())
+                                .build())));
+    }
+
 
 
     private Mono<ServerResponse> buildErrorResponse(HttpStatus httpStatus,  TechnicalMessage error,

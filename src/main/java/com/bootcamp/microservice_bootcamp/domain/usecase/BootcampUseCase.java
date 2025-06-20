@@ -5,10 +5,12 @@ import com.bootcamp.microservice_bootcamp.domain.api.IBootcampServicePort;
 import com.bootcamp.microservice_bootcamp.domain.enums.TechnicalMessage;
 import com.bootcamp.microservice_bootcamp.domain.exceptions.BusinessException;
 import com.bootcamp.microservice_bootcamp.domain.model.Bootcamp;
+import com.bootcamp.microservice_bootcamp.domain.model.BootcampReportData;
 import com.bootcamp.microservice_bootcamp.domain.model.BootcampWithCapacitiesAndTechnologies;
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampCapacityAssociationPort;
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampPersistencePort;
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampQueryPort;
+import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampReportSenderPort;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -22,36 +24,63 @@ public class BootcampUseCase implements IBootcampServicePort {
     private final IBootcampPersistencePort bootcampPersistencePort;
     private final IBootcampCapacityAssociationPort bootcampCapacityAssociationPort;
     private final IBootcampQueryPort bootcampQueryPort;
+    private final IBootcampReportSenderPort reportSenderPort;
 
     public BootcampUseCase(
             IBootcampPersistencePort bootcampPersistencePort,
-            IBootcampCapacityAssociationPort bootcampCapacityAssociationPort, IBootcampQueryPort bootcampQueryPort
+            IBootcampCapacityAssociationPort bootcampCapacityAssociationPort,
+            IBootcampQueryPort bootcampQueryPort,
+            IBootcampReportSenderPort reportSenderPort
     ) {
         this.bootcampPersistencePort = bootcampPersistencePort;
         this.bootcampCapacityAssociationPort = bootcampCapacityAssociationPort;
         this.bootcampQueryPort = bootcampQueryPort;
+        this.reportSenderPort = reportSenderPort;
     }
 
+    @Override
     public Mono<String> registerBootcampWithCapacities(Bootcamp bootcamp, List<Long> capacityIds) {
         return validateCapacity(bootcamp)
                 .then(validateTechnologyIds(capacityIds))
-                .then(Mono.defer(() -> bootcampPersistencePort.existsByName(bootcamp.name())))
+                .then(checkIfBootcampExists(bootcamp.name()))
                 .flatMap(exists -> {
                     if (Boolean.TRUE.equals(exists)) {
                         return Mono.error(new BusinessException(TechnicalMessage.BOOTCAMP_ALREADY_EXISTS));
                     }
-                    return bootcampPersistencePort.save(bootcamp)
-                            .flatMap(savedCapacity ->
-                                    bootcampCapacityAssociationPort.associateCapacityToBootcamp(savedCapacity.id(), capacityIds)
-                                            .flatMap(success -> {
-                                                if (Boolean.TRUE.equals(success)) {
-                                                    return Mono.just(TechnicalMessage.BOOTCAMP_CREATED.name());
-                                                } else {
-                                                    return bootcampPersistencePort.deleteById(savedCapacity.id())
-                                                            .then(Mono.error(new BusinessException(TechnicalMessage.BOOTCAMP_ASSOCIATION_FAILED)));
-                                                }
-                                            }));
+                    return saveBootcampAndAssociate(bootcamp, capacityIds);
                 });
+    }
+
+    private Mono<Boolean> checkIfBootcampExists(String name) {
+        return bootcampPersistencePort.existsByName(name);
+    }
+
+    private Mono<String> saveBootcampAndAssociate(Bootcamp bootcamp, List<Long> capacityIds) {
+        return bootcampPersistencePort.save(bootcamp)
+                .flatMap(savedBootcamp ->
+                        bootcampCapacityAssociationPort.associateCapacityToBootcamp(savedBootcamp.id(), capacityIds)
+                                .flatMap(success -> {
+                                    if (Boolean.TRUE.equals(success)) {
+                                        return sendReportSilently(savedBootcamp)
+                                                .thenReturn(TechnicalMessage.BOOTCAMP_CREATED.name());
+                                    } else {
+                                        return bootcampPersistencePort.deleteById(savedBootcamp.id())
+                                                .then(Mono.error(new BusinessException(TechnicalMessage.BOOTCAMP_ASSOCIATION_FAILED)));
+                                    }
+                                }));
+    }
+
+    private Mono<Void> sendReportSilently(Bootcamp bootcamp) {
+        BootcampReportData report = BootcampReportData.builder()
+                .bootcampId(bootcamp.id())
+                .name(bootcamp.name())
+                .description(bootcamp.description())
+                .releaseDate(bootcamp.releaseDate())
+                .duration(bootcamp.duration())
+                .build();
+
+        return reportSenderPort.sendBootcampReport(report)
+                .onErrorResume(e -> Mono.empty());
     }
 
     @Override

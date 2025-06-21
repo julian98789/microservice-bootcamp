@@ -26,69 +26,52 @@ public class BootcampReportSenderAdapter implements IBootcampReportSenderPort {
 
     @Override
     public Mono<Void> sendBootcampReport(BootcampReportData reportData) {
-        Mono<Integer> capacityCountMono = fetchCapacityCount(reportData.bootcampId());
-        Mono<Integer> technologyCountMono = fetchTechnologyCount(reportData.bootcampId());
-        Mono<Integer> personCountMono = fetchPersonCount(reportData.bootcampId());
-
-        return Mono.zip(capacityCountMono, technologyCountMono, personCountMono)
-                .flatMap(tuple -> {
-                    BootcampReportData complete = enrichReportData(reportData,
-                            tuple.getT1(), tuple.getT2(), tuple.getT3());
-                    return sendReportToService(complete);
-                });
-    }
-
-    private Mono<Integer> fetchCapacityCount(Long bootcampId) {
-        return webClient.get()
-                .uri(capacityServiceUrl + "/capacity/bootcamp/summary?bootcampId={id}", bootcampId)
+        Mono<Integer> capacityCountMono = webClient.get()
+                .uri(capacityServiceUrl + "/capacity/bootcamp/summary?bootcampId={id}", reportData.bootcampId())
                 .retrieve()
                 .bodyToMono(CapacitySummaryResponse.class)
                 .map(CapacitySummaryResponse::capacityCount)
                 .onErrorResume(e -> Mono.just(0));
-    }
 
-    private Mono<Integer> fetchTechnologyCount(Long bootcampId) {
-        return webClient.get()
-                .uri(capacityServiceUrl + "/capacity/bootcamp/summary?bootcampId={id}", bootcampId)
+        Mono<Integer> technologyCountMono = webClient.get()
+                .uri(capacityServiceUrl + "/capacity/bootcamp/summary?bootcampId={id}", reportData.bootcampId())
                 .retrieve()
                 .bodyToMono(CapacitySummaryResponse.class)
                 .map(CapacitySummaryResponse::totalTechnologyCount)
                 .onErrorResume(e -> Mono.just(0));
-    }
 
-    private Mono<Integer> fetchPersonCount(Long bootcampId) {
-        return webClient.get()
-                .uri(personServiceUrl + "/person/bootcamp/{id}/count", bootcampId)
+        Mono<Integer> personCountMono = webClient.get()
+                .uri(personServiceUrl + "/person/bootcamp/{id}/count", reportData.bootcampId())
                 .retrieve()
                 .bodyToMono(PersonCountResponse.class)
                 .map(PersonCountResponse::personCount)
                 .onErrorResume(e -> Mono.just(0));
-    }
 
-    private BootcampReportData enrichReportData(BootcampReportData baseData,
-                                                int capacityCount,
-                                                int technologyCount,
-                                                int personCount) {
-        return BootcampReportData.builder()
-                .bootcampId(baseData.bootcampId())
-                .name(baseData.name())
-                .description(baseData.description())
-                .releaseDate(baseData.releaseDate())
-                .duration(baseData.duration())
-                .registeredPersonCount(personCount)
-                .capacityCount(capacityCount)
-                .totalTechnologyCount(technologyCount)
-                .build();
-    }
+        return Mono.zip(capacityCountMono, technologyCountMono, personCountMono)
+                .flatMap(tuple -> {
+                    int capacityCount = tuple.getT1();
+                    int techCount = tuple.getT2();
+                    int personCount = tuple.getT3();
 
-    private Mono<Void> sendReportToService(BootcampReportData reportData) {
-        return webClient.post()
-                .uri(reportServiceUrl + "/report/bootcamp")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(reportData)
-                .retrieve()
-                .bodyToMono(Void.class)
-                .onErrorResume(e -> Mono.empty());
+                    BootcampReportData complete = BootcampReportData.builder()
+                            .bootcampId(reportData.bootcampId())
+                            .name(reportData.name())
+                            .description(reportData.description())
+                            .releaseDate(reportData.releaseDate())
+                            .duration(reportData.duration())
+                            .registeredPersonCount(personCount)
+                            .capacityCount(capacityCount)
+                            .totalTechnologyCount(techCount)
+                            .build();
+
+                    return webClient.post()
+                            .uri(reportServiceUrl + "/report/bootcamp")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(complete)
+                            .retrieve()
+                            .bodyToMono(Void.class)
+                            .onErrorResume(e -> Mono.empty());
+                });
     }
 
     private record CapacitySummaryResponse(int capacityCount, int totalTechnologyCount) {}

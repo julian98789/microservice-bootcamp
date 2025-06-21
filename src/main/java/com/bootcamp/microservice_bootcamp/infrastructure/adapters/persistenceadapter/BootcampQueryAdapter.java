@@ -1,8 +1,6 @@
 package com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter;
 
-import com.bootcamp.microservice_bootcamp.domain.model.BootcampWithCapacitiesAndTechnologies;
-import com.bootcamp.microservice_bootcamp.domain.model.CapacityWithTechnologies;
-import com.bootcamp.microservice_bootcamp.domain.model.TechnologySummary;
+import com.bootcamp.microservice_bootcamp.domain.model.*;
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampQueryPort;
 import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter.entity.BootcampEntity;
 import com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistenceadapter.mapper.IBootcampEntityMapper;
@@ -28,6 +26,9 @@ public class BootcampQueryAdapter implements IBootcampQueryPort {
     @Value("${capacity.service.url:http://localhost:8081}")
     private String capacityServiceUrl;
 
+    @Value("${person.service.url:http://localhost:8083}")
+    private String personServiceUrl;
+
     @Override
     public Flux<BootcampWithCapacitiesAndTechnologies> listBootcampsPagedAndSorted(
             int page, int size, String sortBy, String direction) {
@@ -42,6 +43,57 @@ public class BootcampQueryAdapter implements IBootcampQueryPort {
                     .flatMapMany(entities -> sortAndPaginateBootcamps(entities, page, size, direction))
                     .flatMap(this::enrichBootcampWithCapacitiesAndTechnologies);
         }
+    }
+
+    @Override
+    public Mono<BootcampWithCapacitiesAndPersons> findBootcampWithMostPersons() {
+        return bootcampRepository.findAll()
+                .collectList()
+                .flatMap(this::findBootcampWithMostPersonsFromList);
+    }
+
+    private Mono<BootcampWithCapacitiesAndPersons> findBootcampWithMostPersonsFromList(List<BootcampEntity> entities) {
+        return Flux.fromIterable(entities)
+                .flatMap(this::mapToBootcampWithPersonsAndCapacities)
+                .collectList()
+                .map(list -> list.stream()
+                        .max(Comparator.comparing(b -> b.registeredPersons().size()))
+                        .orElseThrow(() -> new RuntimeException("No bootcamps found")));
+    }
+
+    private Mono<BootcampWithCapacitiesAndPersons> mapToBootcampWithPersonsAndCapacities(BootcampEntity entity) {
+        Mono<List<Person>> personsMono = fetchRegisteredPersons(entity.getId());
+        Mono<List<CapacityWithTechnologies>> capacitiesMono = fetchCapacitiesWithTechnologies(entity.getId());
+
+        return Mono.zip(personsMono, capacitiesMono)
+                .map(tuple -> new BootcampWithCapacitiesAndPersons(
+                        entity.getId(),
+                        entity.getName(),
+                        entity.getDescription(),
+                        entity.getReleaseDate(),
+                        entity.getDuration(),
+                        tuple.getT1(),
+                        tuple.getT2()
+                ));
+    }
+
+    private Mono<List<Person>> fetchRegisteredPersons(Long bootcampId) {
+        return webClient.get()
+                .uri(personServiceUrl + "/person/bootcamp/{id}/info", bootcampId)
+                .retrieve()
+                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .map(map -> new Person(map.get("name").toString(), map.get("email").toString()))
+                .collectList()
+                .onErrorResume(e -> Mono.just(List.of()));
+    }
+
+    private Mono<List<CapacityWithTechnologies>> fetchCapacitiesWithTechnologies(Long bootcampId) {
+        return webClient.get()
+                .uri(capacityServiceUrl + "/capacity/bootcamp/capacities-technologies?bootcampId={id}", bootcampId)
+                .retrieve()
+                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .collectList()
+                .map(this::mapToCapacitiesWithTechnologies);
     }
 
     private Mono<Map<Long, Integer>> getBootcampRelationCounts() {
@@ -94,12 +146,7 @@ public class BootcampQueryAdapter implements IBootcampQueryPort {
     }
 
     private Mono<BootcampWithCapacitiesAndTechnologies> enrichBootcampWithCapacitiesAndTechnologies(BootcampEntity entity) {
-        return webClient.get()
-                .uri(capacityServiceUrl + "/capacity/bootcamp/capacities-technologies?bootcampId={id}", entity.getId())
-                .retrieve()
-                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {})
-                .collectList()
-                .map(this::mapToCapacitiesWithTechnologies)
+        return fetchCapacitiesWithTechnologies(entity.getId())
                 .map(capacities -> new BootcampWithCapacitiesAndTechnologies(
                         entity.getId(),
                         entity.getName(),

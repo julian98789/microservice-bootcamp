@@ -134,7 +134,8 @@ public class RouterRest {
         return route(POST("/bootcamp"), bootcampHandler::createBootcamp)
                 .andRoute(GET("/bootcamp/list"), bootcampHandler::listBootcamps)
                 .andRoute(DELETE("/bootcamp/{bootcampId}"), bootcampHandler::deleteBootcamp)
-                .andRoute(POST("/bootcamp/validate-list"), bootcampHandler::validateBootcampIds);
+                .andRoute(POST("/bootcamp/validate-list"), bootcampHandler::validateBootcampIds)
+                .andRoute(GET("/bootcamp/most-registered"), bootcampHandler::getBootcampWithMostPersons);
 
     }
 }

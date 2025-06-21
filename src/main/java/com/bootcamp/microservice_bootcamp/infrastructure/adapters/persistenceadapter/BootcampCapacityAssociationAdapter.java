@@ -3,7 +3,6 @@ package com.bootcamp.microservice_bootcamp.infrastructure.adapters.persistencead
 
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampCapacityAssociationPort;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -18,8 +17,6 @@ public class BootcampCapacityAssociationAdapter implements IBootcampCapacityAsso
 
     private final WebClient webClient;
 
-    @Value("${technology.service.url:http://localhost:8081}")
-    private String capacityUrlService;
 
     @Override
     public Mono<Boolean> associateCapacityToBootcamp(Long capacityId, List<Long> technologyIds) {
@@ -28,7 +25,7 @@ public class BootcampCapacityAssociationAdapter implements IBootcampCapacityAsso
                 "capacityIds", technologyIds
         );
         return webClient.post()
-                .uri(capacityUrlService + "/capacity/bootcamp/associate")
+                .uri( "http://localhost:8081/capacity/bootcamp/associate")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
                 .retrieve()
@@ -40,7 +37,7 @@ public class BootcampCapacityAssociationAdapter implements IBootcampCapacityAsso
     @Override
     public Mono<Void> deleteCapacitiesByBootcampId(Long bootcampId) {
         return webClient.delete()
-                .uri(capacityUrlService + "/capacity/bootcamp/{bootcampId}/exclusive-delete", bootcampId)
+                .uri("http://localhost:8081/capacity/bootcamp/{bootcampId}/exclusive-delete", bootcampId)
                 .retrieve()
                 .bodyToMono(Void.class);
     }

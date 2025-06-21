@@ -9,6 +9,7 @@ import com.bootcamp.microservice_bootcamp.domain.exceptions.TechnicalException;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.dto.BootcampDTO;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.mapper.IBootcampMapper;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.mapper.IBootcampWithCapacitiesAndTechnologiesMapper;
+import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.mapper.IBootcampWithPersonsAndCapacitiesMapper;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.util.APIResponse;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.util.ErrorDTO;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,8 @@ public class BootcampHandlerImpl {
     private final IBootcampServicePort bootcampServicePort;
     private final IBootcampMapper bootcampMapper;
     private final IBootcampWithCapacitiesAndTechnologiesMapper bootcampWithCapTechMapper;
+    private final IBootcampWithPersonsAndCapacitiesMapper  bootcampWithPersonsAndCapacitiesMapper;
+
 
 
     public Mono<ServerResponse> createBootcamp(ServerRequest request) {
@@ -130,6 +133,19 @@ public class BootcampHandlerImpl {
                                 .message(ex.getMessage())
                                 .param(ex.getTechnicalMessage().getParam())
                                 .build())))
+                .onErrorResume(ex -> buildErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        TechnicalMessage.INTERNAL_ERROR,
+                        List.of(ErrorDTO.builder()
+                                .code(TechnicalMessage.INTERNAL_ERROR.getCode())
+                                .message(ex.getMessage())
+                                .build())));
+    }
+
+    public Mono<ServerResponse> getBootcampWithMostPersons(ServerRequest request) {
+        return bootcampServicePort.findBootcampWithMostPersons()
+                .map(bootcampWithPersonsAndCapacitiesMapper::toDTO)
+                .flatMap(dto -> ServerResponse.ok().bodyValue(dto))
                 .onErrorResume(ex -> buildErrorResponse(
                         HttpStatus.INTERNAL_SERVER_ERROR,
                         TechnicalMessage.INTERNAL_ERROR,

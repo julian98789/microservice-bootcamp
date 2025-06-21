@@ -6,6 +6,7 @@ import com.bootcamp.microservice_bootcamp.domain.enums.TechnicalMessage;
 import com.bootcamp.microservice_bootcamp.domain.exceptions.BusinessException;
 import com.bootcamp.microservice_bootcamp.domain.model.Bootcamp;
 import com.bootcamp.microservice_bootcamp.domain.model.BootcampReportData;
+import com.bootcamp.microservice_bootcamp.domain.model.BootcampWithCapacitiesAndPersons;
 import com.bootcamp.microservice_bootcamp.domain.model.BootcampWithCapacitiesAndTechnologies;
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampCapacityAssociationPort;
 import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampPersistencePort;
@@ -14,10 +15,7 @@ import com.bootcamp.microservice_bootcamp.domain.spi.IBootcampReportSenderPort;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public class BootcampUseCase implements IBootcampServicePort {
 
@@ -127,7 +125,10 @@ public class BootcampUseCase implements IBootcampServicePort {
                 });
     }
 
-
+    @Override
+    public Mono<BootcampWithCapacitiesAndPersons> findBootcampWithMostPersons() {
+        return bootcampQueryPort.findBootcampWithMostPersons();
+    }
 
 
     private Mono<Void> validateCapacity(Bootcamp bootcamp) {

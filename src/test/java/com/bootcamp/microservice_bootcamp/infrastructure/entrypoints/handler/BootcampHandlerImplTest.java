@@ -5,9 +5,12 @@ import com.bootcamp.microservice_bootcamp.domain.enums.TechnicalMessage;
 import com.bootcamp.microservice_bootcamp.domain.exceptions.BusinessException;
 import com.bootcamp.microservice_bootcamp.domain.exceptions.TechnicalException;
 import com.bootcamp.microservice_bootcamp.domain.model.Bootcamp;
+import com.bootcamp.microservice_bootcamp.domain.model.BootcampWithCapacitiesAndPersons;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.dto.BootcampDTO;
+import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.dto.BootcampWithPersonsAndCapacitiesDTO;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.mapper.IBootcampMapper;
 import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.mapper.IBootcampWithCapacitiesAndTechnologiesMapper;
+import com.bootcamp.microservice_bootcamp.infrastructure.entrypoints.mapper.IBootcampWithPersonsAndCapacitiesMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +38,9 @@ class BootcampHandlerImplTest {
     @Mock
     private IBootcampWithCapacitiesAndTechnologiesMapper bootcampWithCapacitiesAndTechnologiesMapper;
 
+    @Mock
+    IBootcampWithPersonsAndCapacitiesMapper bootcampWithPersonsAndCapacitiesMapper;
+
     private BootcampHandlerImpl handler;
 
     @BeforeEach
@@ -42,7 +48,8 @@ class BootcampHandlerImplTest {
         MockitoAnnotations.openMocks(this);
         handler = new BootcampHandlerImpl(bootcampServicePort,
                 bootcampMapper,
-                bootcampWithCapacitiesAndTechnologiesMapper);
+                bootcampWithCapacitiesAndTechnologiesMapper,
+                bootcampWithPersonsAndCapacitiesMapper);
     }
 
     @Test
@@ -241,6 +248,35 @@ class BootcampHandlerImplTest {
         when(bootcampServicePort.validateAndReturnIds(ids)).thenReturn(Mono.error(exception));
 
         ServerResponse response = handler.validateBootcampIds(request).block();
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.statusCode());
+    }
+
+    @Test
+    void getBootcampWithMostPersons_success() {
+        ServerRequest request = mock(ServerRequest.class);
+
+        BootcampWithCapacitiesAndPersons domain = mock(BootcampWithCapacitiesAndPersons.class);
+        BootcampWithPersonsAndCapacitiesDTO dto = mock(BootcampWithPersonsAndCapacitiesDTO.class);
+
+        when(bootcampServicePort.findBootcampWithMostPersons()).thenReturn(Mono.just(domain));
+        when(bootcampWithPersonsAndCapacitiesMapper.toDTO(domain)).thenReturn(dto);
+
+        ServerResponse response = handler.getBootcampWithMostPersons(request).block();
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.statusCode());
+    }
+
+    @Test
+    void getBootcampWithMostPersons_unexpectedError() {
+        ServerRequest request = mock(ServerRequest.class);
+
+        when(bootcampServicePort.findBootcampWithMostPersons())
+                .thenReturn(Mono.error(new RuntimeException("Unexpected error")));
+
+        ServerResponse response = handler.getBootcampWithMostPersons(request).block();
+
         assertNotNull(response);
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.statusCode());
     }
